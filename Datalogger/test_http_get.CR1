@@ -1,0 +1,49 @@
+'CR1000 Series Datalogger
+
+'For programming tips, copy this address to your browser
+'search window:https://www.campbellsci.com/videos/datalogger-programming
+'To create a different opening program template, type in new
+'instructions and select Template | Save as Default Template
+'Date:
+'Program author:
+
+'Declare Constants
+'Example:
+'CONST PI = 3.141592654 or Const PI = 4*ATN(1)
+
+'Declare Public Variables
+'Example:
+Public PTemp, Batt_volt
+
+'Declare Private Variables
+'Example:
+'Dim Counter
+
+'Define Data Tables.
+DataTable (Test,1,-1) 'Set table size to # of records, or -1 to autoallocate.
+  DataInterval (0,15,Sec,10)
+  Minimum (1,Batt_volt,FP2,False,False)
+  Sample (1,PTemp,FP2)
+EndTable
+
+Public http_get_uri As String * 200
+Public http_get_resp
+Public http_get_head
+Public http_get_handle
+Public ping_ms As Long
+
+'Main Program
+BeginProg
+  ' http_get_uri = "GET https://api.thingspeak.com/update?api_key=6HA7RCAUAS1M1TL7&field1=0"
+  http_get_uri = "https://api.thingspeak.com/update?api_key=6HA7RCAUAS1M1TL7&field1=0"
+  Scan (5,Sec,0,0)
+    PanelTemp (PTemp,60)
+    Battery (Batt_volt)
+    'http_get_handle = HTTPGet (http_get_uri, http_get_resp, http_get_head,400)
+    ping_ms = PingIP ("https://api.thingspeak.com",1000)
+    'http_get_handle = HTTPPost (http_get_uri,"", http_get_resp, http_get_head,,,,,400)
+
+    CallTable Test
+  NextScan
+EndProg
+

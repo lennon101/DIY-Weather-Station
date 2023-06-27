@@ -1,0 +1,100 @@
+'CR6 Datalogger
+
+' Constants for the ThingSpeak channel
+Const thingspeak_write_api_key = "4G3MHSR0AVS9MC1L"
+Const thingspeak_url = "GET https://api.thingspeak.com/update?"
+Const http_get_uri_const = thingspeak_url & "api_key=" & thingspeak_write_api_key
+
+' Variables for the ThingSpeak channel
+Public http_get_uri As String * 200
+Public http_get_resp As String 
+Public http_get_head As String
+Public http_get_handle As String
+Public temp_degC 
+Public rain_mm 
+Public pressure_hpa 
+
+Public temp_hr_avg
+Public rain_mm_hr_total
+Public pressure_hr_avg
+
+Public temp_15min_avg
+Public rain_mm_15min_total
+Public pressure_15min_avg 
+
+Public PTemp, Batt_volt
+
+' Constants for the BaroVUE10 device
+Const barovue10_sdi_port = 1  ' SDI port num for the first baroVUE10
+Const CR = CHR(13) 
+Const LF = CHR(10)
+
+' variables for the BaroVUE10 device 
+Public barovue10(3) As Float  'BaroVUE10 list: 
+Alias barovue10(1) = barovue10_press
+Alias barovue10(2) = barovue10_temp
+Alias barovue10(3) = barovue10_qm
+
+'Define Data Tables
+DataTable (HourlyData,1,-1) 
+	DataInterval (0,1,Hr,10)
+	Average (1,Batt_volt,FP2,False)
+	Average (1,PTemp,FP2,False)
+  Average (1,temp_degC,FP2,False)
+  Totalize (1,rain_mm,FP2,False)
+  Average (1,pressure_hpa,FP2,False)
+EndTable
+
+DataTable (FifteenMinData,1,-1) 
+	DataInterval (0,5,Min,10)
+	Average (1,Batt_volt,FP2,False)
+	Average (1,PTemp,FP2,False)
+  Average (1,temp_degC,FP2,False)
+  Totalize (1,rain_mm,FP2,False)
+  Average (1,pressure_hpa,FP2,False)
+EndTable
+
+'Main Program
+BeginProg
+  http_get_resp = ""
+  http_get_head = ""
+  rain_mm = 0
+  pressure_hpa = 0
+	Scan (5,Sec,0,0)
+		PanelTemp (PTemp,15000)
+		Battery (Batt_volt)
+		
+    TCDiff(temp_degC,1,mv200C,U9,TypeT,PTemp,True,500,60,1,0) 
+    PulseCount(rain_mm,1,U1,1,0,.2,0)
+    
+    ' Get the BaroVUE10 measurements 
+    'SDI12Recorder (barovue10(), barovue10_sdi_port, 0, "M!", 1.0, 0)  
+    pressure_hpa = Batt_volt  ' temporary for testing 
+    
+    ' update the table data before attempting to collect the data back from it in the variables below 
+    CallTable FifteenMinData
+		CallTable HourlyData
+		
+'    temp_hr_avg = HourlyData.temp_degC_Avg
+'    rain_mm_hr_total = HourlyData.rain_mm_Tot
+'    pressure_hr_avg = HourlyData.pressure_hpa_Avg
+    
+    temp_15min_avg = FifteenMinData.temp_degC_Avg
+    rain_mm_15min_total = FifteenMinData.rain_mm_Tot
+    pressure_15min_avg = FifteenMinData.pressure_hpa_Avg
+    
+    'Start building message for submission to wunderground    
+'    If TimeIntoInterval (0,1,Hr) Then  ' only send the hourly data every hr 
+'      http_get_uri = http_get_uri_const & "&field1=" & temp_15min_avg & "&field2=" & rain_mm_15min_total & "&field3=" & pressure_15min_avg & "&field4=" & temp_hr_avg & "&field5=" & rain_mm_hr_total & "&field6=" & pressure_hr_avg
+'      http_get_handle = HTTPGet (http_get_uri, http_get_resp, http_get_head)
+'      http_get_uri = http_get_uri_const
+'    Else If TimeIntoInterval (0,1,Min) Then ' only send the 15min data every 15mins 
+    If TimeIntoInterval (0,5,Min) Then ' only send the 5min data every 5mins 
+      http_get_uri = http_get_uri_const & "&field1=" & temp_15min_avg & "&field2=" & rain_mm_15min_total & "&field3=" & pressure_15min_avg
+      http_get_handle = HTTPGet (http_get_uri, http_get_resp, http_get_head)
+      http_get_uri = http_get_uri_const 
+    End If 
+    
+	NextScan
+EndProg
+

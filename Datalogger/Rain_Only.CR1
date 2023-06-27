@@ -1,0 +1,71 @@
+'CR1000
+
+Const thingspeak_write_api_key = "5ASFOEQ2OL1EL7ML"
+Public http_get_uri = "GET https://api.thingspeak.com/update?"
+Public http_get_resp = ""
+Public http_get_head = ""
+Public http_get_handle
+Public field1_value
+
+'Declare Variables and Units
+Public batt_v
+Public panel_temp_degC
+Public rain_mm
+Public tc_degC
+
+' Weather underground vars
+Public rain_inches 
+Public tc_f 
+
+Units batt_v=Volts
+Units panel_temp_degC=degC
+Units rain_mm=mm
+Units tc_degC=degC
+
+'Define Data Tables
+DataTable(HourlyWeather,True,-1)
+	DataInterval(0,60,Min,10)
+	Totalize(1,rain_mm,FP2,False)
+	Average (1,tc_degC,FP2,False)
+EndTable
+
+DataTable(FifteenMinWeather,True,-1)
+	DataInterval(0,15,Min,10)
+	Totalize(1,rain_mm,FP2,False)
+  Average (1,tc_degC,FP2,False)
+EndTable
+
+DataTable(RealTimeWeather,True,-1)
+	DataInterval(0,5,Sec,10)
+	Minimum(1,batt_v,FP2,False,False)
+	Sample (1,tc_degC,FP2)
+EndTable
+
+Public Result
+
+'Main Program
+BeginProg
+  http_get_uri = http_get_uri & "api_key=" & thingspeak_write_api_key
+	'Main Scan
+	Scan(5,Sec,1,0)
+		'Default CR1000 Datalogger Battery Voltage measurement 'BattV'
+		Battery(batt_v)
+		'Default CR1000 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+		PanelTemp(panel_temp_degC,_50Hz)
+		'Generic Tipping Bucket Rain Gauge measurement 'Rain_mm'
+		PulseCount(rain_mm,1,1,2,0,0.2,0)		
+    ' Read the thermocouple 
+    TCDiff(tc_degC,1,mV2_5C,1,TypeT,panel_temp_degC,True,0,_50Hz,1,0)
+		'Call Data Tables and Store Data
+    
+    'Start building message for submission to wunderground
+    http_get_uri = http_get_uri & "&field1=" & field1_value
+    
+    http_get_handle = HTTPGet (http_get_uri, http_get_resp, http_get_head)
+    If InStr (1,http_get_head,"200 OK",2) = 0 Then Result = -2 'connected but post failed
+
+		CallTable HourlyWeather
+		CallTable FifteenMinWeather
+		CallTable RealTimeWeather
+	NextScan
+EndProg

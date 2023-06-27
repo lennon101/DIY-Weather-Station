@@ -1,0 +1,193 @@
+﻿Sub wundergroundPWS(Result,StationID As String * 64,Password As String * 64,WxData(30),AqData(19),Optional DateSS1990 As Long = 0,Optional UTCOffset As Long = 0,Optional ServerResp As String * 500 = "")
+  '----------------------------------------------------------------------------
+  'Result:
+  '   > 100 if successful
+  '   = 0 if could not connect
+  '   = -1 if successful
+  '   = -2 if connected but not successful, did not receive "200 OK" from server
+  '----------------------------------------------------------------------------
+  'StationID:
+  '   (String) The ID of your station. For example "KUTLOGAN8"
+  '----------------------------------------------------------------------------
+  'Password:
+  '   (String) Your Weather Underground password for the account that StationID is associated with
+  '----------------------------------------------------------------------------
+  'WxData:
+  '   (Float, Array) Predefined array of weather data values; see definitions below
+  '----------------------------------------------------------------------------
+  'AqData:
+  '   (Float, Array) Predefined array of air quality data values; see definitions below
+  '----------------------------------------------------------------------------
+  'DateSS1990:
+  '   (Long) Timestamp, expressed as a integer representing the number of seconds
+  '          since 1/1/1990 00:00:00, that the data should be associated with.
+  '          If UTC Offset is 0, then this value should represent UTC time
+  '          = 0 if you want wunderground to timestamp the data for you as it comes in; most common
+  '          > 0 if you want to provide a timestamp from the datalogger; data backfill operation
+  '----------------------------------------------------------------------------
+  'UTCOffset:
+  '   (Long) The offset from UTC time, in seconds, that should be applied to the DateSS1990.
+  '          This setting will only be used if the datalogger UTC Offset setting is -1.
+  '          If the datalogger UTC offset setting is <> -1, this parameter will be ignored.
+  '----------------------------------------------------------------------------
+
+  'Dim WxData(30)
+  'Alias WxData(1)  = winddir          '[0-360 instantaneous wind direction]
+  'Alias WxData(2)  = windspeedmph     '[mph instantaneous wind speed]
+  'Alias WxData(3)  = windgustmph      '[mph current wind gust, using software specific time period]
+  'Alias WxData(4)  = windgustdir      '[0-360 using software specific time period]
+  'Alias WxData(5)  = windspdmph_avg2m '[mph 2 minute Average wind speed mph]
+  'Alias WxData(6)  = winddir_avg2m    '[0-360 2 minute Average wind direction]
+  'Alias WxData(7)  = windgustmph_10m  '[mph past 10 minutes wind gust mph ]
+  'Alias WxData(8)  = windgustdir_10m  '[0-360 past 10 minutes wind gust direction]
+  'Alias WxData(9)  = humidity         '[% outdoor humidity 0-100%]
+  'Alias WxData(10) = dewptf           '[F outdoor DewPoint F]
+  'Alias WxData(11) = tempf            '[F outdoor temperature #1]
+  'Alias WxData(12) = temp2f           '[F outdoor temperature #2]
+  'Alias WxData(13) = temp3f           '[F outdoor temperature #3]
+  'Alias WxData(14) = temp4f           '[F outdoor temperature #4]
+  'Alias WxData(15) = temp5f           '[F outdoor temperature #5]
+  'Alias WxData(16) = rainin           '[rain inches over the past hour)]
+  'Alias WxData(17) = dailyrainin      '[rain inches so far today in local time]
+  'Alias WxData(18) = baromin          '[barometric pressure inches]
+  'Alias WxData(19) = soiltempf        '[F soil temperature #1]
+  'Alias WxData(20) = soiltemp2f       '[F soil temperature #2]
+  'Alias WxData(21) = soiltemp3f       '[F soil temperature #3]
+  'Alias WxData(22) = soiltemp4f       '[F soil temperature #4]
+  'Alias WxData(23) = soiltemp5f       '[F soil temperature #5]
+  'Alias WxData(24) = leafwetness      '[% leafwetness #1]
+  'Alias WxData(25) = leafwetness2     '[% leafwetness #2]
+  'Alias WxData(26) = solarradiation   '[W/m^2]
+  'Alias WxData(27) = UV               '[index]
+  'Alias WxData(28) = visibility       '[nm visibility]
+  'Alias WxData(29) = indoortempf      '[F indoor temperature F]
+  'Alias WxData(30) = indoorhumidity   '[% indoor humidity 0-100]
+
+  'Dim AqData(19)
+  'Alias AqData(1) =  AqNO      '(nitric oxide) ppb
+  'Alias AqData(2) =  AqNO2T    '(nitrogen dioxide), true measure ppb
+  'Alias AqData(3) =  AqNO2     'NO2 computed, NOx-NO ppb
+  'Alias AqData(4) =  AqNO2Y    'NO2 computed, NOy-NO ppb
+  'Alias AqData(5) =  AqNOX     'NOx (nitrogen oxides) - ppb
+  'Alias AqData(6) =  AqNOY     'NOy (total reactive nitrogen) - ppb
+  'Alias AqData(7) =  AqNO3     'NO3 ion (nitrate, not adjusted for ammonium ion) UG/M3
+  'Alias AqData(8) =  AqSO4     'SO4 ion (sulfate, not adjusted for ammonium ion) UG/M3
+  'Alias AqData(9) =  AqSO2     'sulfur dioxide), conventional ppb
+  'Alias AqData(10) = AqSO2T    'trace levels ppb
+  'Alias AqData(11) = AqCO      'CO (carbon monoxide), conventional ppm
+  'Alias AqData(12) = AqCOT     'CO trace levels ppb
+  'Alias AqData(13) = AqEC      'EC (elemental carbon) – PM2.5 UG/M3
+  'Alias AqData(14) = AqOC      'OC (organic carbon, not adjusted for oxygen and hydrogen) – PM2.5 UG/M3
+  'Alias AqData(15) = AqBC      'BC (black carbon at 880 nm) UG/M3
+  'Alias AqData(16) = AqUV_AETH 'UV-AETH (second channel of Aethalometer at 370 nm) UG/M3
+  'Alias AqData(17) = AqPM2_5   'PM2.5 mass - UG/M3
+  'Alias AqData(18) = AqPM10    'PM10 mass - PM10 mass
+  'Alias AqData(19) = AqOZONE   'Ozone - ppb
+
+  Dim http_get_head As String * 500
+  Dim http_get_resp As String * 50
+  Dim http_get_uri As String * 1100
+  Dim http_get_handle As Long
+
+  Dim i As Long, j As Long
+  Dim dateutc As String * 31
+
+  Dim WxName(30) As String * 16
+  WxName(1)  = "winddir"
+  WxName(2)  = "windspeedmph"
+  WxName(3)  = "windgustmph"
+  WxName(4)  = "windgustdir"
+  WxName(5)  = "windspdmph_avg2m"
+  WxName(6)  = "winddir_avg2m"
+  WxName(7)  = "windgustmph_10m"
+  WxName(8)  = "windgustdir_10m"
+  WxName(9)  = "humidity"
+  WxName(10) = "dewptf"
+  WxName(11) = "tempf"
+  WxName(12) = "temp2f"
+  WxName(13) = "temp3f"
+  WxName(14) = "temp4f"
+  WxName(15) = "temp5f"
+  WxName(16) = "rainin"
+  WxName(17) = "dailyrainin"
+  WxName(18) = "baromin"
+  WxName(19) = "soiltempf"
+  WxName(20) = "soiltemp2f"
+  WxName(21) = "soiltemp3f"
+  WxName(22) = "soiltemp4f"
+  WxName(23) = "soiltemp5f"
+  WxName(24) = "leafwetness"
+  WxName(25) = "leafwetness2"
+  WxName(26) = "solarradiation"
+  WxName(27) = "UV"
+  WxName(28) = "visibility"
+  WxName(29) = "indoortempf"
+  WxName(30) = "indoorhumidity"
+
+  Dim AqName(19) As String * 16
+  AqName(1) =  "AqNO"
+  AqName(2) =  "AqNO2T"
+  AqName(3) =  "AqNO2"
+  AqName(4) =  "AqNO2Y"
+  AqName(5) =  "AqNOX"
+  AqName(6) =  "AqNOY"
+  AqName(7) =  "AqNO3"
+  AqName(8) =  "AqSO4"
+  AqName(9) =  "AqSO2"
+  AqName(10) = "AqSO2T"
+  AqName(11) = "AqCO"
+  AqName(12) = "AqCOT"
+  AqName(13) = "AqEC"
+  AqName(14) = "AqOC"
+  AqName(15) = "AqBC"
+  AqName(16) = "AqUV%2DAETH"
+  AqName(17) = "AqPM2%2E5"
+  AqName(18) = "AqPM10"
+  AqName(19) = "AqOZONE"
+
+  Result = -1 'start out assuming success
+
+  'Start building message for submission to wunderground
+  http_get_uri = "http://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?action=updateraw"
+  http_get_uri = http_get_uri & "&ID=" & StationID
+  http_get_uri = http_get_uri & "&PASSWORD=" & Password
+
+  If DateSS1990 <= 0 Then
+    http_get_uri = http_get_uri & "&dateutc=now"
+  Else
+    If Status.UTCOffset = -1 Then
+      dateutc = SecsSince1990 ((DateSS1990 + UTCOffset),4)
+    Else
+      dateutc = SecsSince1990 ((DateSS1990 + Status.UTCOffset),4)
+    EndIf
+    dateutc = Left(dateutc,19)
+    dateutc = Replace(dateutc," ","+")
+    dateutc = Replace(dateutc,":","%3A")
+    http_get_uri = http_get_uri & "&dateutc=" & dateutc
+  EndIf
+
+  j = 0
+  For i = 1 To ArrayLength(WxData)
+    If WxData(i) <> NAN Then
+      http_get_uri = http_get_uri & "&" & wxName(i) & "=" & WxData(i)
+      j += 1 'actually have some data to send
+    EndIf
+  Next i
+  For i = 1 To ArrayLength(AqData)
+    If AqData(i) <> NAN Then
+      http_get_uri = http_get_uri & "&" & AqName(i) & "=" & AqData(i)
+      j += 1 'actually have some data to send
+    EndIf
+  Next i
+
+  If j > 0 Then
+    http_get_resp = ""
+    http_get_head = ""
+    http_get_handle = HTTPGet (http_get_uri,http_get_resp,http_get_head)
+    Result = http_get_handle 'will return 0 if httpget connection fails, will return > 100 if httpget connection succeeds
+    If InStr (1,http_get_head,"200 OK",2) = 0 Then Result = -2 'connected but post failed
+    ServerResp = http_get_resp & ";" & http_get_head
+  EndIf
+
+EndSub
+

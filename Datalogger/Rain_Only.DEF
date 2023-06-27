@@ -1,0 +1,62 @@
+7/29/2022
+12:13:19
+Created by Short Cut (4.4)
+Short Cut Program:  Rain_Only.DEF
+
+-Wiring for CR1000-
+
+  Generic TB
+    Ground:  Shield
+    Ground:  Ground
+    P1:  Signal
+
+-Measurement Labels-
+
+  Default
+    BattV
+    PTemp_C
+
+  Generic TB
+    Rain_mm
+
+----------------------------------------------------
+Table: Weather
+Interval: 60 MIN
+Fields:
+ Rain_mm_Tot	Units: mm
+
+----------------------------------------------------
+Table: Table2
+Interval: 1440 MIN
+Fields:
+ BattV_Min	Units: Volts
+
+----------------------------------------------------
+Table: DataTableInfo
+Fields:
+ DataTableName(1)
+ DataTableName(2)
+ SkippedRecord(1)
+ SkippedRecord(2)
+ DataRecordSize(1,1)	Units: records
+ DataRecordSize(1,2)	Units: records
+ DataRecordSize(2,1)	Units: records
+ DataRecordSize(2,2)	Units: records
+ SecsPerRecord(1)
+ SecsPerRecord(2)
+ DataFillDays(1,1)	Units: days
+ DataFillDays(1,2)	Units: days
+ DataFillDays(2,1)	Units: days
+ DataFillDays(2,2)	Units: days
+ DataFilled(1,1)
+ DataFilled(1,2)
+ DataFilled(1,3)
+ DataFilled(1,4)
+
+----------------------------------------------------
+Table: Public
+Fields:
+ BattV	Units: Volts
+ PTemp_C	Units: Deg C
+ Rain_mm	Units: mm
+

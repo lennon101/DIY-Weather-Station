@@ -1,0 +1,125 @@
+'CR000 Datalogger
+
+' Constants for the ThingSpeak channel
+Const thingspeak_write_api_key = "5ASFOEQ2OL1EL7ML"
+Const thingspeak_url = "http://api.thingspeak.com/update?"
+Const http_get_uri_const = thingspeak_url & "api_key=" & thingspeak_write_api_key
+Public packet_sent As String * 200
+
+' variables for arduino 
+Const arduino_com = Com2
+Const trigger_meas_cmd_string = "M" '+ CHR(13)
+Const num_arduino_meas = 3
+Public in_string As String * 100
+Public arduino_meas(num_arduino_meas)
+Alias arduino_meas(1) = bme280_temp
+Alias arduino_meas(2) = bme280_pressure
+Alias arduino_meas(3) = bme280_rh
+
+' Variables for the ThingSpeak channel
+Public http_get_uri As String * 200
+Public http_get_resp As String 
+Public http_get_head As String
+Public http_get_handle As String
+Public temp_degC 
+Public rain_mm 
+Public pressure_hpa 
+
+Public temp_avg
+Public rain_mm_total
+Public pressure_avg 
+Public bme280_temp_avg
+Public bme280_pressure_avg
+Public bme280_rh_avg
+
+Public panel_temp_degC, batt_v
+
+' Constants for the BaroVUE10 device
+Const barovue10_sdi_port = 1  ' SDI port num for the first baroVUE10
+Const CR = CHR(13) 
+Const LF = CHR(10)
+
+' variables for the BaroVUE10 device 
+Public barovue10(3) As Float  'BaroVUE10 list: 
+Alias barovue10(1) = barovue10_press
+Alias barovue10(2) = barovue10_temp
+Alias barovue10(3) = barovue10_qm
+
+'Define Data Tables
+DataTable (HourlyData,1,-1) 
+	DataInterval (0,1,Hr,10)
+	Average (1,batt_v,FP2,False)
+	Average (1,panel_temp_degC,FP2,False)
+  Average (1,temp_degC,FP2,False)
+  Totalize (1,rain_mm,FP2,False)
+  Average (1,pressure_hpa,FP2,False)
+EndTable
+
+DataTable (FiveMinData,1,-1) 
+	DataInterval (0,5,Min,10)
+  Average (1,temp_degC,IEEE4,False)
+  Totalize (1,rain_mm,FP2,False)
+  Average (1,pressure_hpa,IEEE4,False)
+  Average (1,bme280_temp,IEEE4,False)
+  Average (1,bme280_pressure,IEEE4,False)
+  Average (1,bme280_rh,IEEE4,False)
+EndTable
+
+'Main Program
+BeginProg
+  http_get_resp = ""
+  http_get_head = ""
+  rain_mm = 0
+  pressure_hpa = 0
+  temp_avg = 0
+  rain_mm_total = 0
+  pressure_avg = 0
+  ' Open serial comms to talk to Arduino
+  SerialOpen (arduino_com, 115200, 16, 0, 100)
+  
+	Scan (5,Sec,0,0)
+		'Default CR1000 Datalogger Battery Voltage measurement 'BattV'
+		Battery(batt_v)
+		'Default CR1000 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+		PanelTemp(panel_temp_degC,_50Hz)
+		
+    TCDiff(temp_degC,1,mV2_5C,1,TypeT,panel_temp_degC,True,0,_50Hz,1,0) 
+    'Generic Tipping Bucket Rain Gauge measurement 'Rain_mm'
+		PulseCount(rain_mm,1,1,2,0,0.2,0)	
+    
+    ' Get the BaroVUE10 measurements 
+    SDI12Recorder (barovue10(), barovue10_sdi_port, 0, "M!", 1.0, 0)  
+    pressure_hpa = barovue10_press  
+    
+    ' ======== Collect measurements from Arduino =========
+		' Trigger the arduino for measurments 
+		SerialOut(arduino_com, trigger_meas_cmd_string, "", 0, 0)
+    ' Get the CSV file 
+		SerialIn (in_string, arduino_com, 200, CHR(10),200)
+		SplitStr (arduino_meas(), in_string, ",",num_arduino_meas,0)
+		' ===== End Collect measurements from Arduino =========
+    
+    ' update the table data before attempting to collect the data back from it in the variables below 
+    CallTable FiveMinData
+		CallTable HourlyData
+    
+    temp_avg = FiveMinData.temp_degC_Avg
+    rain_mm_total = FiveMinData.rain_mm_Tot
+    pressure_avg = FiveMinData.pressure_hpa_Avg
+    bme280_temp_avg = FiveMinData.bme280_temp_avg
+    bme280_pressure_avg = FiveMinData.bme280_pressure_avg
+    bme280_rh_avg = FiveMinData.bme280_rh_avg
+    
+    'Start building message for submission to wunderground    
+    If TimeIntoInterval (0,5,min) Then ' only send the 5min data every 5mins
+      http_get_uri = http_get_uri_const & "&field1=" & temp_avg & "&field2=" & rain_mm_total & "&field3=" & pressure_avg & "&field4=" & bme280_rh_avg
+      http_get_handle = HTTPGet (http_get_uri, http_get_resp, http_get_head)
+      
+      packet_sent = http_get_uri  ' save a copy for debugging 
+      http_get_uri = http_get_uri_const ' reset the uri 
+      
+    End If 
+    
+	NextScan
+EndProg
+
